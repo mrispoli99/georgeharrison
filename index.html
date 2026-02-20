@@ -755,10 +755,23 @@ let clipTimer = null;
 
 async function itunesSearch(query) {
   const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=8&country=us`;
-  const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(itunesUrl)}`;
-  const resp = await fetch(proxyUrl);
-  if (!resp.ok) throw new Error('Proxy fetch failed: ' + resp.status);
-  return await resp.json();
+  const proxies = [
+    () => fetch(`https://corsproxy.io/?${encodeURIComponent(itunesUrl)}`),
+    () => fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(itunesUrl)}`),
+    () => fetch(`https://thingproxy.freeboard.io/fetch/${itunesUrl}`),
+  ];
+  for (const proxyFn of proxies) {
+    try {
+      const resp = await proxyFn();
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      if (data && data.results !== undefined) return data;
+      if (data && data.contents) return JSON.parse(data.contents);
+    } catch(e) {
+      // try next proxy
+    }
+  }
+  throw new Error('All proxies failed');
 }
 
 async function loadAudio(song) {
